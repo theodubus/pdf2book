@@ -4,7 +4,7 @@ Pdf2Book is a tool that transforms PDF files into a format suitable for printing
 
 ## Installation
 ```bash
-git clone
+git clone https://github.com/Th3o-D/pdf2book.git
 cd pdf2book
 pip install -r requirements.txt
 ```
