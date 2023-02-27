@@ -24,6 +24,7 @@ If you make any changes to these options, you can update the preview by clicking
 Once you're satisfied with the preview, you can render the PDF by clicking on the "Render PDF" button. The rendering process will display a progress bar, indicating the estimated time remaining for the PDF rendering. During the rendering process, you can continue to change the conversion options or preview other files since the rendering and preview processes are independent.
 
 Here is an image of the application :
+
 <img src="./img/app.png" alt="app" width="500"/>
 
 After the PDF has been generated, utilize duplex printing and then follow the given instructions to arrange the sheets:
