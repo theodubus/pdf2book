@@ -9,6 +9,8 @@ cd pdf2book
 pip install -r requirements.txt
 ```
 
+The `temp/` folder is where previews are stored, don't delete it.
+
 ## Usage
 To use the PDF Booklet Maker, start by loading the file you want to convert. Once the file is loaded, a preview of the converted booklet will be displayed, allowing you to see the result of the conversion.
 
