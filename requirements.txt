@@ -1,0 +1,4 @@
+PyMuPDF==1.21.1
+PyPDF2==3.0.1
+screeninfo==0.8.1
+tkPDFViewer==0.1
