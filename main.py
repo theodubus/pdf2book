@@ -63,22 +63,29 @@ class Application(tk.Tk):
         self.check_remove_annotations = tk.Checkbutton(self, text="Delete annotations", variable=self.remove_annotations, onvalue=True, offvalue=False)
         self.check_remove_annotations.grid(row=2, column=0, sticky="w", padx=(25, 0), pady=(20, 0), columnspan=2)
 
+        self.empty_pages = tk.StringVar()
+        self.empty_pages.set("0")
+        self.label_empty_pages = tk.Label(self, text="Number of empty pages : ")
+        self.label_empty_pages.grid(row=3, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.entry_empty_pages = tk.Entry(self, textvariable=self.empty_pages, width=7, justify="center")
+        self.entry_empty_pages.grid(row=3, column=1, sticky="e", pady=(20, 0))
+
         self.label_distribution = tk.Label(self, text="Distribution : ")
-        self.label_distribution.grid(row=3, column=0, sticky="w", padx=(30, 0), pady=(20, 0), columnspan=2)
+        self.label_distribution.grid(row=4, column=0, sticky="w", padx=(30, 0), pady=(20, 0), columnspan=2)
 
         self.radio_value = tk.StringVar()
         self.radio_value.set("auto")
         self.radio_auto = tk.Radiobutton(self, text="Auto", variable=self.radio_value, value="auto", command=self.change_entry)
-        self.radio_auto.grid(row=4, column=0, sticky="w", padx=(25, 0), columnspan=2)
+        self.radio_auto.grid(row=5, column=0, sticky="w", padx=(25, 0), columnspan=2)
         self.radio_booklet = tk.Radiobutton(self, text="Specify number of booklets", variable=self.radio_value, value="booklet", command=self.change_entry)
-        self.radio_booklet.grid(row=5, column=0, sticky="w", padx=(25, 0), columnspan=2)
+        self.radio_booklet.grid(row=6, column=0, sticky="w", padx=(25, 0), columnspan=2)
         self.radio_sheet = tk.Radiobutton(self, text="Specify number of sheets per booklet", variable=self.radio_value, value="sheet", command=self.change_entry)
-        self.radio_sheet.grid(row=6, column=0, sticky="w", pady=(0, 20), padx=(25, 0), columnspan=2)
+        self.radio_sheet.grid(row=7, column=0, sticky="w", pady=(0, 20), padx=(25, 0), columnspan=2)
         
         self.preview_variable = tk.StringVar()
         self.preview_variable.set("No file selected")
         self.preview_label = tk.Label(self, bg="white", width=75, height=25, textvariable=self.preview_variable)
-        self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=11, pady=(30, 0))
+        self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
         self.preview_pdf = None
         self.preview_booklet = None
         self.preview_pair = None
@@ -86,63 +93,63 @@ class Application(tk.Tk):
         self.distrib_booklets_pages = None
 
         self.label_booklet = tk.Label(self, text="Current booklet : ")
-        self.label_booklet.grid(row=8, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.label_booklet.grid(row=9, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
 
         self.booklet_value = tk.IntVar()
         self.booklet_value.set(1)
         self.label_booklet_value = tk.Label(self, textvariable=self.booklet_value, bg="white", width=7)
-        self.label_booklet_value.grid(row=8, column=1, sticky="e", pady=(20, 0))
+        self.label_booklet_value.grid(row=9, column=1, sticky="e", pady=(20, 0))
 
         self.label_booklet_sheet = tk.Label(self, text="Current sheet for this booklet : ")
-        self.label_booklet_sheet.grid(row=9, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.label_booklet_sheet.grid(row=10, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
 
         self.booklet_sheet_value = tk.IntVar()
         self.booklet_sheet_value.set(1)
         self.label_booklet_sheet_value = tk.Label(self, textvariable=self.booklet_sheet_value, bg="white", width=7)
-        self.label_booklet_sheet_value.grid(row=9, column=1, sticky="e", pady=(20, 0))
+        self.label_booklet_sheet_value.grid(row=10, column=1, sticky="e", pady=(20, 0))
 
         self.label_sheet = tk.Label(self, text="Current sheet : ")
-        self.label_sheet.grid(row=10, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.label_sheet.grid(row=11, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
 
         self.sheet_value = tk.IntVar()
         self.sheet_value.set(1)
         self.label_sheet_value = tk.Label(self, textvariable=self.sheet_value, bg="white", width=7)
-        self.label_sheet_value.grid(row=10, column=1, sticky="e", pady=(20, 0))
+        self.label_sheet_value.grid(row=11, column=1, sticky="e", pady=(20, 0))
 
         self.label_page_input = tk.Label(self, text="Current pages in the input file : ")
-        self.label_page_input.grid(row=11, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.label_page_input.grid(row=12, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
 
         self.page_input_value = tk.StringVar()
         self.page_input_value.set("")
         self.label_page_input_value = tk.Label(self, textvariable=self.page_input_value, bg="white", width=7)
-        self.label_page_input_value.grid(row=11, column=1, sticky="e", pady=(20, 0))
+        self.label_page_input_value.grid(row=12, column=1, sticky="e", pady=(20, 0))
 
         self.label_page = tk.Label(self, text="Current page in the output file : ")
-        self.label_page.grid(row=12, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.label_page.grid(row=13, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
 
         self.page_value = tk.IntVar()
         self.page_value.set(1)
         self.label_page_value = tk.Label(self, textvariable=self.page_value, bg="white", width=7)
-        self.label_page_value.grid(row=12, column=1, sticky="e", pady=(20, 0))
+        self.label_page_value.grid(row=13, column=1, sticky="e", pady=(20, 0))
 
         self.button_preview_previous = tk.Button(self, text="<", command=self.previous_preview)
-        self.button_preview_previous.grid(row=13, column=2, sticky="e", pady=(20), padx=(0, 10))
+        self.button_preview_previous.grid(row=14, column=2, sticky="e", pady=(20), padx=(0, 10))
 
         self.button_preview_update = tk.Button(self, text="Update preview", command=self.update_preview)
-        self.button_preview_update.grid(row=13, column=3, sticky="ew", pady=(20))
+        self.button_preview_update.grid(row=14, column=3, sticky="ew", pady=(20))
 
         self.button_preview_next = tk.Button(self, text=">", command=self.next_preview)
-        self.button_preview_next.grid(row=13, column=4, sticky="w", pady=(20), padx=(10, 0))
+        self.button_preview_next.grid(row=14, column=4, sticky="w", pady=(20), padx=(10, 0))
 
         self.variable_title_entry = tk.StringVar()
         self.variable_title_entry.set("Number of booklets : ")
         self.title_entry = tk.Label(self, textvariable=self.variable_title_entry)
 
         self.variable_entry = tk.StringVar()
-        self.number_entry = tk.Entry(self, textvariable=self.variable_entry, width=7)        
+        self.number_entry = tk.Entry(self, textvariable=self.variable_entry, width=7, justify="center")        
 
         self.button_render_pdf = tk.Button(self, text="Render PDF", command=self.render)
-        self.button_render_pdf.grid(row=14, column=0, columnspan=5, pady=(20))
+        self.button_render_pdf.grid(row=15, column=0, columnspan=5, pady=(20))
         self.make_thread = None
         self.exception_render_thread = None
         self.errors = []
@@ -156,7 +163,7 @@ class Application(tk.Tk):
 
     def set_error(self, error):
         self.error_variable.set(f"Error : {error}")
-        self.error_label.grid(row=16, column=0, columnspan=5, sticky="we", padx=(30, 30), pady=(20, 0))
+        self.error_label.grid(row=17, column=0, columnspan=5, sticky="we", padx=(30, 30), pady=(20, 0))
 
     def clear_error(self):
         self.error_variable.set("")
@@ -165,8 +172,8 @@ class Application(tk.Tk):
     def progress_init(self, max_value):
         self.progress_var.set(0)
         self.progress_bar["maximum"] = max_value
-        self.progression_label.grid(row=15, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
-        self.progress_bar.grid(row=15, column=1, columnspan=4, sticky="we", padx=(0, 30), pady=(20, 0))
+        self.progression_label.grid(row=16, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        self.progress_bar.grid(row=16, column=1, columnspan=4, sticky="we", padx=(0, 30), pady=(20, 0))
 
     def update_progress(self):
         progress = self.progress_var.get() + 1
@@ -209,6 +216,12 @@ class Application(tk.Tk):
                     self.set_error("Number of sheets must be an integer greater than 0")
                 return False
             
+        empty_pages = self.empty_pages.get()
+        if not empty_pages.isdigit() or int(empty_pages) < 0:
+            if not preview:
+                self.set_error("Number of empty pages must be an integer greater than or equal to 0")
+            return False
+            
         self.clear_error()
         return True
 
@@ -245,17 +258,24 @@ class Application(tk.Tk):
         
     def update_preview(self, event=None):
         self.preview_label.grid_forget()
+
+        empty_pages = max(int(self.empty_pages.get()), 0)
         try:
             if self.preview_variable.get() in  {"No file selected", "Error while generating preview, invalid options may have been selected"}:
                 self.preview_init()
+            elif empty_pages > 0:
+                try:
+                    self.preview()
+                except Exception:
+                    self.preview_init()
             else:
                 self.preview()
             self.preview_variable.set("")
         except Exception as e:
             self.preview_variable.set("Error while generating preview, invalid options may have been selected")
-            self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=11, pady=(30, 0))
+            self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
 
-            raise e
+            # raise e
     
     def preview_init(self):
         if not self.valid_data(preview=True):
@@ -275,6 +295,11 @@ class Application(tk.Tk):
             n_sheets = 7
 
         input_filename = self.input_variable.get()
+
+        empty_pages = int(self.empty_pages.get())
+        if empty_pages > 0:
+            input_filename = add_empty_pages(input_filename, empty_pages)
+
         with open(input_filename, 'rb') as input_file:
             reader = PyPDF2.PdfReader(input_file)
             self.distrib_booklets_pages = distribution_booklets_pages(len(reader.pages), n_booklets, n_sheets)
@@ -298,6 +323,10 @@ class Application(tk.Tk):
         page_right = self.distrib_booklets_pages[self.preview_booklet][self.preview_pair][1]
 
         input_filename = self.input_variable.get()
+
+        empty_pages = int(self.empty_pages.get())
+        if empty_pages > 0:
+            input_filename = f"{os.path.dirname(os.path.realpath(__file__))}/temp/empty.pdf"
 
         with open(input_filename, 'rb') as input_file:
             reader = PyPDF2.PdfReader(input_file)
@@ -344,7 +373,7 @@ class Application(tk.Tk):
                                         pdf_location=self.preview_file,
                                         width=75, height=25)
             
-            self.preview_pdf.grid(row=2, column=2, columnspan=3, rowspan=11, pady=(30, 0))
+            self.preview_pdf.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
         
         self.booklet_value.set(self.preview_booklet + 1)
         self.booklet_sheet_value.set((self.preview_pair//2) + 1)
@@ -352,7 +381,6 @@ class Application(tk.Tk):
         self.sheet_value.set(self.get_current_sheet())
         current_pair = self.distrib_booklets_pages[self.preview_booklet][self.preview_pair]
         self.page_input_value.set(f"{current_pair[0] + 1}-{current_pair[1] + 1}")
-
 
     def next_preview(self):
         if self.preview_booklet is None or self.preview_pair is None:
@@ -400,35 +428,63 @@ class Application(tk.Tk):
             self.progression_label.grid_forget()
             self.progress_bar.grid_forget()
             self.clear_error()
-            messagebox.showinfo("Success", "PDF created successfully")     
+            messagebox.showinfo("Success", "PDF created successfully")
+            self.clean_tmp()   
 
     def thread_make_pdf(self, input_file, output_file, n_booklets="auto", remove_annotations=True, n_sheets=7, progress=None):
         try:
-            make_pdf(input_file, output_file, n_booklets=n_booklets, remove_annotations=remove_annotations, n_sheets=n_sheets, progress=progress)
+            empty_pages = int(self.empty_pages.get())
+            make_pdf(input_file, output_file, n_booklets=n_booklets, remove_annotations=remove_annotations, n_sheets=n_sheets, progress=progress, empty_pages=empty_pages)
         except Exception as e:
             self.errors.append(str(e))
             return
 
     def change_entry(self):
         if self.radio_value.get() == "booklet":
-            self.title_entry.grid(row=7, column=0, sticky="w", padx=(30, 0))
-            self.number_entry.grid(row=7, column=1, sticky="e")
+            self.title_entry.grid(row=8, column=0, sticky="w", padx=(30, 0))
+            self.number_entry.grid(row=8, column=1, sticky="e")
             self.variable_title_entry.set("Number of booklets : ")
         elif self.radio_value.get() == "sheet":
-            self.title_entry.grid(row=7, column=0, sticky="w", padx=(30, 0))
-            self.number_entry.grid(row=7, column=1, sticky="e")
+            self.title_entry.grid(row=8, column=0, sticky="w", padx=(30, 0))
+            self.number_entry.grid(row=8, column=1, sticky="e")
             self.variable_title_entry.set("Number of sheets per booklet : ")
         else:
             self.title_entry.grid_forget()
             self.number_entry.grid_forget()
+
+    def clean_tmp(self):
+        temp_dir = f"{os.path.dirname(os.path.realpath(__file__))}/temp"
+        temp_preview = f"{temp_dir}/preview.pdf"
+        temp_empty = f"{temp_dir}/empty.pdf"
+
+        if os.path.exists(temp_preview):
+            os.remove(temp_preview)
+
+        if os.path.exists(temp_empty):
+            os.remove(temp_empty)
+
+        if self.preview_pdf:
+            self.preview_pdf.grid_forget()
+            self.preview_pdf = None
+        self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
+        self.preview_variable.set("No file selected")
+        self.input_variable.set("No file selected")
+        self.output_variable.set("No file selected")
+
+        self.booklet_value.set(1)
+        self.booklet_sheet_value.set(1)
+        self.sheet_value.set(1)
+        self.page_input_value.set("")
+        self.page_value.set(1)
+        
 
     def select_input_file(self):
         file_selected = filedialog.askopenfile(mode='r', initialdir=os.path.expanduser("~"), title="Select a file",
                                                filetypes=[("fichiers pdf", "*.pdf")])
         
         if file_selected:
+            self.clean_tmp()
             self.input_variable.set(file_selected.name)
-            self.input_file.update()
             self.preview_booklet = 0
             self.preview_pair = 0
             self.update_preview()

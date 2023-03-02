@@ -1,11 +1,49 @@
 import PyPDF2
 from distribution import distribution_booklets_pages
+import os
+
+def add_empty_pages(input_filename, n_pages):
+    """
+    Adds a certain number of empty pages at the beggining
+    and the end of the PDF file.
+    """
+    with open(input_filename, 'rb') as input_file:
+        reader = PyPDF2.PdfReader(input_file)
+
+        writer = PyPDF2.PdfWriter()
+
+        output_filename = f"{os.path.dirname(os.path.realpath(__file__))}/temp/empty.pdf"
+        with open(output_filename, 'wb') as output_file:
+            width, height = get_dimensions(reader.pages)
+
+            for _ in range(n_pages):
+                page = PyPDF2.PageObject.create_blank_page(
+                    width=width,
+                    height=height)
+                writer.add_page(page)
+
+            for page in reader.pages:
+                writer.add_page(page)
+
+            for _ in range(n_pages):
+                page = PyPDF2.PageObject.create_blank_page(
+                    width=width,
+                    height=height)
+                writer.add_page(page)
+            
+            writer.write(output_file)
+
+    return output_filename
 
 
-def make_pdf(input_filename, output_filename, n_booklets="auto", remove_annotations=True, n_sheets=7, progress=None):
+
+def make_pdf(input_filename, output_filename, n_booklets="auto", remove_annotations=True, n_sheets=7, progress=None, empty_pages=0):
 
     if input_filename == output_filename:
         raise ValueError("The input and output file cannot be the same")
+    
+    if empty_pages > 0:
+        input_filename = add_empty_pages(input_filename, empty_pages)
 
     # Open the input PDF file in read-binary mode
     with open(input_filename, 'rb') as input_file:

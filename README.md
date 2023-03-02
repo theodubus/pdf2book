@@ -9,13 +9,15 @@ cd pdf2book
 pip install -r requirements.txt
 ```
 
-The `temp/` folder is where previews are stored, don't delete it.
+The `temp/` folder is where previews and other temporary files are stored, don't delete it.
 
 ## Usage
 To use the PDF Booklet Maker, start by loading the file you want to convert. Once the file is loaded, a preview of the converted booklet will be displayed, allowing you to see the result of the conversion.
 
 You can then customize the conversion process using the following options:
 + Delete annotations: This option allows you to remove annotations from the original PDF file that may interfere with the booklet layout, causing them to be displayed incorrectly or in the wrong place.
++ Number of empty pages: If you plan to add a cover to your book, you may want to add a few blank pages at the beginning and at the end of the PDF file, in order to glue them to the cover. This option allows you to specify the number of blank pages you want to add to the beginning and end of the PDF file (might most often be 1 or 2, depending on if you want to have your first page to be the
+back of the one glued to the cover or the next one).
 + Distribution:
     + Auto: The Auto option automatically calculates the number of booklets to create an average of 7 sheets per booklet based on the number of pages in the PDF file.
     + Specify number of booklets: This option allows you to specify the number of booklets you want to print, and then the program calculates the number of sheets per booklet required to achieve this.
