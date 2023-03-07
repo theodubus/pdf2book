@@ -38,7 +38,7 @@ If you want more information about the process, you can watch theses videos :
 + [Assembling the booklets into a book](https://www.youtube.com/watch?v=9O4kFTOEh6k)
 + [Add a cover to your book](https://www.youtube.com/watch?v=Av_rU-yOPd4)
 
-Before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklets to make them the same size one you fold them.
+Before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklets to make them the same size once you fold them.
 
 It's important to keep in mind that in case the original PDF pages are of varying sizes, a few of them might get cropped or not show correctly. The software endeavors to adjust the size based on the most frequently occurring page size in the input PDF file.
 
