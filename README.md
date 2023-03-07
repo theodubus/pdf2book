@@ -40,6 +40,8 @@ If you want more information about the process, you can watch theses videos :
 
 Before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklets to make them the same size once you fold them.
 
+This is if you want a hight quality result, but if you don't care about the quality, you can just staple the sheets together and it will work too.
+
 It's important to keep in mind that in case the original PDF pages are of varying sizes, a few of them might get cropped or not show correctly. The software endeavors to adjust the size based on the most frequently occurring page size in the input PDF file.
 
 <div align="right" style="display: flex">
