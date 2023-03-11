@@ -35,8 +35,9 @@ After the PDF has been generated, utilize duplex printing and then follow the gi
 <img src="./img/steps.png" alt="sheets" width="500"/>
 
 If you want more information about the process, you can watch theses videos :
-+ [Assembling the booklets into a book](https://www.youtube.com/watch?v=9O4kFTOEh6k)
-+ [Add a cover to your book](https://www.youtube.com/watch?v=Av_rU-yOPd4)
++ [Assembling the booklets](https://www.youtube.com/watch?v=9O4kFTOEh6k)
++ [Make the text block](https://www.youtube.com/watch?v=XGQ5P8QVHSg)
++ [Add a hard cover to your book](https://www.youtube.com/watch?v=Av_rU-yOPd4)
 
 Before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklets to make them the same size once you fold them.
 
