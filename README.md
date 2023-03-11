@@ -45,7 +45,7 @@ Here is a less time-consuming method, with prong paper fasteners. First, cut all
 You dont have booklets anymore, but the software is still useful to arrange the pages in the right order, which page goes with which one for each half sheet.
 + [How to make a book with prong paper fasteners](https://www.youtube.com/watch?v=Tey13CS4aps)
 
-Before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklets to make them the same size once you fold them.
+If you use the first method, before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklet to make them the same size once you fold them.
 
 It's important to keep in mind that in case the original PDF pages are of varying sizes, a few of them might get cropped or not show correctly. The software endeavors to adjust the size based on the most frequently occurring page size in the input PDF file.
 
