@@ -41,8 +41,9 @@ If you want more information about the process, you can watch theses videos :
 
 This is if you want a high quality result, but if you don't care about the quality, you can just staple/glue the sheets together and it will work too.
 
-Here is a less time-consuming method, with prong paper fasteners (do the same thing the video says, but instead of binding the sheets directly, bind the booklets together):
-+ [How to make a booklet with prong paper fasteners](https://www.youtube.com/watch?v=Tey13CS4aps)
+Here is a less time-consuming method, with prong paper fasteners. First, cut all the sheets in half, and be shure to keep the order of the pages.
+You dont have booklets anymore, but the software is still useful to arrange the pages in the right order, which page goes with which one for each half sheet.
++ [How to make a book with prong paper fasteners](https://www.youtube.com/watch?v=Tey13CS4aps)
 
 Before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklets to make them the same size once you fold them.
 
