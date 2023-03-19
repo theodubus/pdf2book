@@ -49,6 +49,14 @@ If you use the first method, before assembling the booklets, you may want to cut
 
 It's important to keep in mind that in case the original PDF pages are of varying sizes, a few of them might get cropped or not show correctly. The software endeavors to adjust the size based on the most frequently occurring page size in the input PDF file.
 
+Here is an example of a book I made using this software :
+
+<img src="./img/book1.jpg" alt="book1" width="200"/><br>
+<img src="./img/book2.jpg" alt="book2" width="200"/><br>
+<img src="./img/book3.jpg" alt="book3" width="200"/>
+
+
+
 <div align="right" style="display: flex">
     <img src="https://visitor-badge.glitch.me/badge?page_id=Th3o-D/pdf2book&left_color=gray&right_color=blue" height="20"/>
     <a href="https://github.com/Th3o-D" alt="https://github.com/Th3o-D"><img height="20" style="border-radius: 5px" src="https://img.shields.io/static/v1?style=for-the-badge&label=CREE%20PAR&message=Th3o-D&color=1182c2"></a>
