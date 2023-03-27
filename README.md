@@ -47,7 +47,7 @@ You dont have booklets anymore, but the software is still useful to arrange the 
 
 If you use the first method, before assembling the booklets, you may want to cut the edges of the sheets with a guillotine paper cutter (or something similar) for each booklet to make them the same size once you fold them.
 
-It's important to keep in mind that if the original PDF pages are of varying sizes, a few of them might get cropped or not show correctly. The software endeavors to adjust the size based on the most frequently occurring page size in the input PDF file.
+It's important to keep in mind that if the original PDF pages are of varying sizes, a few of them might get cropped or not show correctly. The software tries to adjust the size based on the most frequently occurring page size in the input PDF file.
 
 Here is an example of a book I made using this software :
 
