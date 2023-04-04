@@ -55,13 +55,13 @@ Here is an example of a book I made using this software :
 <img src="./img/book2.jpg" alt="book2" width="200"/><br>
 <img src="./img/book3.jpg" alt="book3" width="200"/>
 
-<table>
+<table style="border-collapse: collapse">
   <tr>
-    <td rowspan="2"><img src="./img/book1.jpg" alt="book1" width="200"/></td>
-    <td><img src="./img/book2.jpg" alt="book2" width="200"/></td>
+    <td rowspan="2" style="border: none"><img src="./img/book1.jpg" alt="book1" width="200"/></td>
+    <td style="border: none"><img src="./img/book2.jpg" alt="book2" width="200"/></td>
   </tr>
   <tr>
-    <td><img src="./img/book3.jpg" alt="book3" width="200"/></td>
+    <td style="border: none"><img src="./img/book3.jpg" alt="book3" width="200"/></td>
   </tr>
 </table>
 
