@@ -51,10 +51,15 @@ It's important to keep in mind that in case the original PDF pages are of varyin
 
 Here is an example of a book I made using this software :
 
-<img src="./img/book1.jpg" alt="book1" width="200"/><br>
-<img src="./img/book2.jpg" alt="book2" width="200"/><br>
-<img src="./img/book3.jpg" alt="book3" width="200"/>
-
+<div style="display:flex">
+    <div>
+        <img src="./img/book1.jpg" alt="book1" width="200"/><br>
+    </div>
+    <div>
+        <img src="./img/book2.jpg" alt="book2" width="200"/><br>
+        <img src="./img/book3.jpg" alt="book3" width="200"/>
+    </div/
+</div>
 
 
 <div align="right" style="display: flex">
