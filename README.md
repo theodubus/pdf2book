@@ -60,7 +60,7 @@ Here is an example of a book I made using this software :
         <img src="./img/book3.jpg" alt="book3" width="200"/>
     </div>
 </div>
-
+.
 
 <div align="right" style="display: flex">
     <img src="https://visitor-badge.glitch.me/badge?page_id=Th3o-D/pdf2book&left_color=gray&right_color=blue" height="20"/>
