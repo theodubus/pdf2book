@@ -58,7 +58,7 @@ Here is an example of a book I made using this software :
     <div>
         <img src="./img/book2.jpg" alt="book2" width="200"/><br>
         <img src="./img/book3.jpg" alt="book3" width="200"/>
-    </div/>
+    </div>
 </div>
 
 
