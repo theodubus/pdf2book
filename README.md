@@ -9,6 +9,10 @@ cd pdf2book
 pip install -r requirements.txt
 ```
 
+You will also need to install `tkinter`, you can do it via `pip` but it might not work on macOS or some Linux distributions, so you can also [install it via your package manager](https://stackoverflow.com/questions/25905540/importerror-no-module-named-tkinter).
+
+Once you have installed the dependencies, you can run the application by running the `main.py` file.
+
 The `temp/` folder is where previews and other temporary files are stored, don't delete it.
 
 ## Usage
