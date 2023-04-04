@@ -54,10 +54,10 @@ Here is an example of a book I made using this software :
 <table>
   <tr>
     <td rowspan="2" style="border: none"><img src="./img/book1.jpg" alt="book1" width="200"/></td>
-    <td><img src="./img/book21.jpg" alt="book2" width="165"/></td>
+    <td><img src="./img/book2.jpg" alt="book2" width="165"/></td>
   </tr>
   <tr>
-    <td><img src="./img/book31.jpg" alt="book3" width="165"/></td>
+    <td><img src="./img/book3.jpg" alt="book3" width="165"/></td>
   </tr>
 </table>
 
