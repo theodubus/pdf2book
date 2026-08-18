@@ -1,505 +1,627 @@
-from pdf_maker import *
-import tkinter as tk
-from tkinter import filedialog
-from screeninfo import get_monitors
+import math
 import os
-from tkinter.ttk import Progressbar
 import threading
-import time
-from tkinter import messagebox
-import PyPDF2
-from distribution import distribution_booklets_pages
-import pdf_viewer as pdf
+import tkinter as tk
+from io import BytesIO
+from tkinter import filedialog, messagebox, ttk
+
+import sv_ttk
+from pypdf import PdfReader, PdfWriter
+from screeninfo import get_monitors
+
+import pdf_viewer
+from distribution import BLANK, DEFAULT_SHEETS_PER_BOOKLET, distribution_booklets_pages
+from pdf_maker import get_dimensions, make_pdf, make_sheet_side, prepare_document
+
+NO_FILE = "No file selected"
+OUTPUT_SUFFIX = "-booklet"
+PREVIEW_WIDTH = 600
+PREVIEW_HEIGHT = 424
+PROGRESS_REFRESH_MS = 100
+# Options are applied live; wait for a pause in typing before re-rendering.
+PREVIEW_DEBOUNCE_MS = 350
+
 
 class Application(tk.Tk):
-    def __init__(self, height=800, width=1200):
+    def __init__(self, width=1180, height=860):
         super().__init__()
-        self.title("Printable PDF Maker")
+        self.title("Pdf2Book")
 
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
+        sv_ttk.set_theme("light")
 
-        central_monitor = len(get_monitors()) // 2
-        cumulated_width = sum([get_monitors()[i].width for i in range(central_monitor)])
-
-        pos_x = screen_width // 2 - width // 2 + cumulated_width // 2
-        pos_y = screen_height // 2 - height // 2
-
+        pos_x, pos_y = self.centered_position(width, height)
         self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
-
         self.resizable(False, False)
 
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, minsize=300, weight=1)
-        self.grid_columnconfigure(3, minsize=300, weight=1)
-        self.grid_columnconfigure(4, minsize=300, weight=1)
+        # Source document, cached so that changing an option does not re-read
+        # the file from disk: only the endpaper padding is redone when needed.
+        self.source_bytes = None
+        self.source_path = None
+        self.source_page_count = 0
+        self.padded_pdf = None
+        self.prepared_key = None
+        self.preview_dimensions = None
 
-        self.title_input = tk.Label(self, text="Input file : ")
-        self.title_input.grid(row=0, column=0, sticky="w", padx=(30, 0), pady=(20, 0), columnspan=2)
-
-        self.input_variable = tk.StringVar()
-        self.input_variable.set("No file selected")
-        self.input_file = tk.Label(self, textvariable=self.input_variable, bg="white", anchor="w", width=30)
-        self.input_file.grid(row=0, column=2, pady=(20, 0), sticky="ew", columnspan=2)
-
-        self.button_input = tk.Button(self, text="Select a file", command=self.select_input_file)
-        self.button_input.grid(row=0, column=4, sticky="e", pady=(20, 0), padx=(0, 30))
-
-
-        self.title_output = tk.Label(self, text="Output file : ")
-        self.title_output.grid(row=1, column=0, sticky="w", padx=(30, 0), columnspan=2)
-
-        self.output_variable = tk.StringVar()
-        self.output_variable.set("No file selected")
-        self.output_file = tk.Label(self, textvariable=self.output_variable, bg="white", anchor="w", width=30)
-        self.output_file.grid(row=1, column=2, sticky="ew", columnspan=2)
-
-        self.button_output = tk.Button(self, text="Select a file", command=self.select_output_file)
-        self.button_output.grid(row=1, column=4, sticky="e", padx=(0, 30))
-
-        self.remove_annotations = tk.BooleanVar()
-        self.remove_annotations.set(True)
-        self.check_remove_annotations = tk.Checkbutton(self, text="Delete annotations", variable=self.remove_annotations, onvalue=True, offvalue=False)
-        self.check_remove_annotations.grid(row=2, column=0, sticky="w", padx=(25, 0), pady=(20, 0), columnspan=2)
-
-        self.empty_pages = tk.StringVar()
-        self.empty_pages.set("0")
-        self.label_empty_pages = tk.Label(self, text="Number of empty pages : ")
-        self.label_empty_pages.grid(row=3, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
-        self.entry_empty_pages = tk.Entry(self, textvariable=self.empty_pages, width=7, justify="center")
-        self.entry_empty_pages.grid(row=3, column=1, sticky="e", pady=(20, 0))
-
-        self.label_distribution = tk.Label(self, text="Distribution : ")
-        self.label_distribution.grid(row=4, column=0, sticky="w", padx=(30, 0), pady=(20, 0), columnspan=2)
-
-        self.radio_value = tk.StringVar()
-        self.radio_value.set("auto")
-        self.radio_auto = tk.Radiobutton(self, text="Auto", variable=self.radio_value, value="auto", command=self.change_entry)
-        self.radio_auto.grid(row=5, column=0, sticky="w", padx=(25, 0), columnspan=2)
-        self.radio_booklet = tk.Radiobutton(self, text="Specify number of booklets", variable=self.radio_value, value="booklet", command=self.change_entry)
-        self.radio_booklet.grid(row=6, column=0, sticky="w", padx=(25, 0), columnspan=2)
-        self.radio_sheet = tk.Radiobutton(self, text="Specify number of sheets per booklet", variable=self.radio_value, value="sheet", command=self.change_entry)
-        self.radio_sheet.grid(row=7, column=0, sticky="w", pady=(0, 20), padx=(25, 0), columnspan=2)
-        
-        self.preview_variable = tk.StringVar()
-        self.preview_variable.set("No file selected")
-        self.preview_label = tk.Label(self, bg="white", width=75, height=25, textvariable=self.preview_variable)
-        self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
-        self.preview_pdf = None
-        self.preview_booklet = None
-        self.preview_pair = None
-        self.preview_file = f"{os.path.dirname(os.path.realpath(__file__))}/temp/preview.pdf"
         self.distrib_booklets_pages = None
+        self.preview_booklet = 0
+        self.preview_pair = 0
+        self.endpapers = 0
+        self.preview_job = None
 
-        self.label_booklet = tk.Label(self, text="Current booklet : ")
-        self.label_booklet.grid(row=9, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        # Rendering runs in a worker thread. The thread only touches these three
+        # plain attributes; every widget update happens on the main thread, from
+        # poll_render(). Tk is not thread-safe, so widgets must not be touched
+        # from anywhere else.
+        self.render_thread = None
+        self.render_error = None
+        self.progress_total = 0
+        self.progress_done = 0
 
-        self.booklet_value = tk.IntVar()
-        self.booklet_value.set(1)
-        self.label_booklet_value = tk.Label(self, textvariable=self.booklet_value, bg="white", width=7)
-        self.label_booklet_value.grid(row=9, column=1, sticky="e", pady=(20, 0))
+        self.build_layout()
+        self.bind_shortcuts()
 
-        self.label_booklet_sheet = tk.Label(self, text="Current sheet for this booklet : ")
-        self.label_booklet_sheet.grid(row=10, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        # Guard against the traces firing while the widgets are still being set up.
+        self.ready = True
 
-        self.booklet_sheet_value = tk.IntVar()
-        self.booklet_sheet_value.set(1)
-        self.label_booklet_sheet_value = tk.Label(self, textvariable=self.booklet_sheet_value, bg="white", width=7)
-        self.label_booklet_sheet_value.grid(row=10, column=1, sticky="e", pady=(20, 0))
+    # ----------------------------------------------------------------- layout
 
-        self.label_sheet = tk.Label(self, text="Current sheet : ")
-        self.label_sheet.grid(row=11, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+    def build_layout(self):
+        container = ttk.Frame(self, padding=20)
+        container.pack(fill="both", expand=True)
+        container.grid_columnconfigure(0, minsize=440)
+        container.grid_columnconfigure(1, weight=1)
+        container.grid_rowconfigure(0, weight=1)
 
-        self.sheet_value = tk.IntVar()
-        self.sheet_value.set(1)
-        self.label_sheet_value = tk.Label(self, textvariable=self.sheet_value, bg="white", width=7)
-        self.label_sheet_value.grid(row=11, column=1, sticky="e", pady=(20, 0))
+        left = ttk.Frame(container)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
 
-        self.label_page_input = tk.Label(self, text="Current pages in the input file : ")
-        self.label_page_input.grid(row=12, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+        right = ttk.Frame(container)
+        right.grid(row=0, column=1, sticky="n")
 
-        self.page_input_value = tk.StringVar()
-        self.page_input_value.set("")
-        self.label_page_input_value = tk.Label(self, textvariable=self.page_input_value, bg="white", width=7)
-        self.label_page_input_value.grid(row=12, column=1, sticky="e", pady=(20, 0))
+        self.build_files(left)
+        self.build_options(left)
+        self.build_summary(left)
+        self.build_preview(right)
+        self.build_details(right)
+        self.build_actions(container)
 
-        self.label_page = tk.Label(self, text="Current page in the output file : ")
-        self.label_page.grid(row=13, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
+    def build_files(self, parent):
+        frame = ttk.LabelFrame(parent, text="Files", padding=15)
+        frame.pack(fill="x")
+        frame.grid_columnconfigure(1, weight=1)
 
-        self.page_value = tk.IntVar()
-        self.page_value.set(1)
-        self.label_page_value = tk.Label(self, textvariable=self.page_value, bg="white", width=7)
-        self.label_page_value.grid(row=13, column=1, sticky="e", pady=(20, 0))
+        self.input_variable = tk.StringVar(value=NO_FILE)
+        ttk.Label(frame, text="Input").grid(row=0, column=0, sticky="w", pady=(0, 10))
+        self.input_entry = ttk.Entry(frame, textvariable=self.input_variable, state="readonly", width=28)
+        self.input_entry.grid(row=0, column=1, sticky="ew", padx=10, pady=(0, 10))
+        ttk.Button(frame, text="Browse", command=self.select_input_file, width=8).grid(
+            row=0, column=2, pady=(0, 10))
 
-        self.button_preview_previous = tk.Button(self, text="<", command=self.previous_preview)
-        self.button_preview_previous.grid(row=14, column=2, sticky="e", pady=(20), padx=(0, 10))
+        self.output_variable = tk.StringVar(value=NO_FILE)
+        ttk.Label(frame, text="Output").grid(row=1, column=0, sticky="w")
+        self.output_entry = ttk.Entry(frame, textvariable=self.output_variable, state="readonly", width=28)
+        self.output_entry.grid(row=1, column=1, sticky="ew", padx=10)
+        ttk.Button(frame, text="Browse", command=self.select_output_file, width=8).grid(
+            row=1, column=2)
 
-        self.button_preview_update = tk.Button(self, text="Update preview", command=self.update_preview)
-        self.button_preview_update.grid(row=14, column=3, sticky="ew", pady=(20))
+        # A path is too long for the field: show its end, where the name is.
+        for variable, entry in ((self.input_variable, self.input_entry),
+                                (self.output_variable, self.output_entry)):
+            variable.trace_add("write", lambda *_, widget=entry: widget.after_idle(widget.xview_moveto, 1.0))
 
-        self.button_preview_next = tk.Button(self, text=">", command=self.next_preview)
-        self.button_preview_next.grid(row=14, column=4, sticky="w", pady=(20), padx=(10, 0))
+        ttk.Label(frame, text="The output name is filled in automatically; browse to change it.",
+                  foreground="gray").grid(row=2, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
-        self.variable_title_entry = tk.StringVar()
-        self.variable_title_entry.set("Number of booklets : ")
-        self.title_entry = tk.Label(self, textvariable=self.variable_title_entry)
+    def build_options(self, parent):
+        frame = ttk.LabelFrame(parent, text="Options", padding=15)
+        frame.pack(fill="x", pady=(20, 0))
+        frame.grid_columnconfigure(1, weight=1)
 
+        self.remove_annotations = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame, text="Delete annotations", variable=self.remove_annotations).grid(
+            row=0, column=0, columnspan=2, sticky="w")
+
+        self.empty_pages = tk.StringVar(value="0")
+        ttk.Label(frame, text="Endpapers (per side)").grid(row=1, column=0, sticky="w", pady=(15, 0))
+        ttk.Entry(frame, textvariable=self.empty_pages, width=6, justify="center").grid(
+            row=1, column=1, sticky="e", pady=(15, 0))
+        ttk.Label(frame, text="Blank pages to glue to the cover, added at both ends.",
+                  foreground="gray", wraplength=380).grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+        ttk.Separator(frame).grid(row=3, column=0, columnspan=2, sticky="ew", pady=15)
+
+        self.page_numbers = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame, text="Add page numbers", variable=self.page_numbers,
+                        command=self.toggle_numbering).grid(row=4, column=0, columnspan=2, sticky="w")
+
+        self.numbering_start = tk.StringVar(value="1")
+        self.numbering_start_label = ttk.Label(frame, text="Start on physical page")
+        self.numbering_start_label.grid(row=5, column=0, sticky="w", pady=(10, 0))
+        self.numbering_start_entry = ttk.Entry(frame, textvariable=self.numbering_start,
+                                               width=6, justify="center")
+        self.numbering_start_entry.grid(row=5, column=1, sticky="e", pady=(10, 0))
+        self.numbering_hint = ttk.Label(
+            frame, text="That page gets the number 1. Earlier pages and the endpapers stay blank.",
+            foreground="gray", wraplength=380)
+        self.numbering_hint.grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.toggle_numbering()
+
+        ttk.Separator(frame).grid(row=7, column=0, columnspan=2, sticky="ew", pady=15)
+
+        ttk.Label(frame, text="Distribution").grid(row=8, column=0, columnspan=2, sticky="w")
+        self.radio_value = tk.StringVar(value="auto")
+        for index, (value, text) in enumerate((
+            ("auto", "Auto"),
+            ("booklet", "Specify number of booklets"),
+            ("sheet", "Specify number of sheets per booklet"),
+        )):
+            ttk.Radiobutton(frame, text=text, variable=self.radio_value, value=value,
+                            command=self.change_entry).grid(
+                row=9 + index, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        self.variable_title_entry = tk.StringVar(value="Number of booklets")
+        self.title_entry = ttk.Label(frame, textvariable=self.variable_title_entry)
         self.variable_entry = tk.StringVar()
-        self.number_entry = tk.Entry(self, textvariable=self.variable_entry, width=7, justify="center")        
+        self.number_entry = ttk.Entry(frame, textvariable=self.variable_entry, width=6, justify="center")
 
-        self.button_render_pdf = tk.Button(self, text="Render PDF", command=self.render)
-        self.button_render_pdf.grid(row=15, column=0, columnspan=5, pady=(20))
-        self.make_thread = None
-        self.exception_render_thread = None
-        self.errors = []
+        for variable in (self.empty_pages, self.variable_entry, self.radio_value,
+                         self.remove_annotations, self.page_numbers, self.numbering_start):
+            variable.trace_add("write", self.schedule_preview_refresh)
 
-        self.progression_label = tk.Label(self, text="Loading : ")
+    def toggle_numbering(self):
+        state = "normal" if self.page_numbers.get() else "disabled"
+        self.numbering_start_label.configure(state=state)
+        self.numbering_start_entry.configure(state=state)
+        self.numbering_hint.configure(state=state)
+
+    def build_summary(self, parent):
+        frame = ttk.LabelFrame(parent, text="Result", padding=15)
+        frame.pack(fill="x", pady=(20, 0))
+
+        self.summary_variable = tk.StringVar(value="Select a PDF file to start.")
+        ttk.Label(frame, textvariable=self.summary_variable, wraplength=380,
+                  justify="left").pack(anchor="w")
+
+    def build_preview(self, parent):
+        self.preview = pdf_viewer.PdfPreview(parent, width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT)
+        self.preview.pack()
+        self.preview.show_message(NO_FILE)
+
+        navigation = ttk.Frame(parent)
+        navigation.pack(fill="x", pady=(15, 0))
+        navigation.grid_columnconfigure(1, weight=1)
+
+        ttk.Button(navigation, text="‹", width=4, command=self.previous_preview).grid(row=0, column=0)
+        self.navigation_variable = tk.StringVar(value="")
+        ttk.Label(navigation, textvariable=self.navigation_variable, anchor="center").grid(
+            row=0, column=1, sticky="ew")
+        ttk.Button(navigation, text="›", width=4, command=self.next_preview).grid(row=0, column=2)
+
+    def build_details(self, parent):
+        frame = ttk.LabelFrame(parent, text="Current sheet", padding=15)
+        frame.pack(fill="x", pady=(20, 0))
+        frame.grid_columnconfigure(1, weight=1)
+
+        self.booklet_value = tk.StringVar(value="-")
+        self.booklet_sheet_value = tk.StringVar(value="-")
+        self.sheet_value = tk.StringVar(value="-")
+        self.page_input_value = tk.StringVar(value="-")
+        self.page_value = tk.StringVar(value="-")
+
+        rows = (
+            ("Booklet", self.booklet_value),
+            ("Sheet inside this booklet", self.booklet_sheet_value),
+            ("Sheet overall", self.sheet_value),
+            ("Pages of the input file", self.page_input_value),
+            ("Page of the output file", self.page_value),
+        )
+        for index, (text, variable) in enumerate(rows):
+            ttk.Label(frame, text=text).grid(row=index, column=0, sticky="w", pady=3)
+            ttk.Label(frame, textvariable=variable, anchor="e", width=10).grid(
+                row=index, column=1, sticky="e", pady=3)
+
+    def build_actions(self, parent):
+        frame = ttk.Frame(parent)
+        frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(20, 0))
+        frame.grid_columnconfigure(0, weight=1)
+
+        self.button_render_pdf = ttk.Button(frame, text="Render PDF", command=self.render, style="Accent.TButton")
+        self.button_render_pdf.grid(row=0, column=0)
+
         self.progress_var = tk.DoubleVar()
-        self.progress_bar = Progressbar(self, variable=self.progress_var, maximum=100)
+        self.progress_bar = ttk.Progressbar(frame, variable=self.progress_var, maximum=100)
 
         self.error_variable = tk.StringVar()
-        self.error_label = tk.Label(self, textvariable=self.error_variable, fg="red")
+        self.error_label = ttk.Label(frame, textvariable=self.error_variable, foreground="#c0392b",
+                                     wraplength=1100, justify="center", anchor="center")
+
+    def bind_shortcuts(self):
+        self.bind("<Left>", self.on_arrow_key)
+        self.bind("<Right>", self.on_arrow_key)
+
+    def on_arrow_key(self, event):
+        # Let the arrows move the caret when the user is typing in a field.
+        if isinstance(self.focus_get(), (ttk.Entry, tk.Entry)):
+            return
+        self.move_preview(-1 if event.keysym == "Left" else 1)
+
+    @staticmethod
+    def centered_position(width, height):
+        """
+        Top-left corner centring the window on the primary monitor.
+        """
+        try:
+            monitors = get_monitors()
+        except Exception:  # no monitor detected (headless, remote display, ...)
+            monitors = []
+
+        if monitors:
+            monitor = next((m for m in monitors if m.is_primary), monitors[0])
+            return (monitor.x + (monitor.width - width) // 2,
+                    monitor.y + (monitor.height - height) // 2)
+
+        return 0, 0
+
+    # ---------------------------------------------------------------- errors
 
     def set_error(self, error):
         self.error_variable.set(f"Error : {error}")
-        self.error_label.grid(row=17, column=0, columnspan=5, sticky="we", padx=(30, 30), pady=(20, 0))
+        self.error_label.grid(row=2, column=0, sticky="ew", pady=(15, 0))
 
     def clear_error(self):
         self.error_variable.set("")
         self.error_label.grid_forget()
 
+    # -------------------------------------------------------------- progress
+
     def progress_init(self, max_value):
-        self.progress_var.set(0)
-        self.progress_bar["maximum"] = max_value
-        self.progression_label.grid(row=16, column=0, sticky="w", padx=(30, 0), pady=(20, 0))
-        self.progress_bar.grid(row=16, column=1, columnspan=4, sticky="we", padx=(0, 30), pady=(20, 0))
+        """
+        Called from the worker thread: record the total, do not touch widgets.
+        """
+        self.progress_total = max_value
+        self.progress_done = 0
 
     def update_progress(self):
-        progress = self.progress_var.get() + 1
-        if progress > self.progress_bar["maximum"]:
-            progress = 0
-        self.progress_var.set(progress)
+        """
+        Called from the worker thread once per rendered side.
+        """
+        self.progress_done += 1
 
-    def valid_data(self, preview=False):
-        input_file = self.input_variable.get()
-        output_file = self.output_variable.get()
-        number = self.variable_entry.get()
+    def refresh_progress(self):
+        self.progress_bar["maximum"] = max(self.progress_total, 1)
+        self.progress_var.set(min(self.progress_done, self.progress_total))
 
-        if input_file == "No file selected":
-            if not preview:
-                self.set_error("No input file selected")
-            return False
-        
-        if not preview:
-            if output_file == "No file selected":
-                self.set_error("No output file selected")
-                return False
-        
-        if self.radio_value.get() == "booklet":
-            if number == "":
-                if not preview:
-                    self.set_error("No number of booklets specified")
-                return False
+    # ------------------------------------------------------------ validation
+
+    def read_options(self, preview=False):
+        """
+        Validates the form and returns the keyword arguments for make_pdf.
+
+        Raises ValueError with a user-facing message when something is wrong.
+        In preview mode the output file is not required.
+        """
+        if self.input_variable.get() == NO_FILE:
+            raise ValueError("No input file selected")
+
+        if not preview and self.output_variable.get() == NO_FILE:
+            raise ValueError("No output file selected")
+
+        mode = self.radio_value.get()
+        number = self.variable_entry.get().strip()
+        n_booklets, n_sheets = "auto", DEFAULT_SHEETS_PER_BOOKLET
+
+        if mode in ("booklet", "sheet"):
+            label = "booklets" if mode == "booklet" else "sheets"
             if not number.isdigit() or int(number) < 1:
-                if not preview:
-                    self.set_error("Number of booklets must be an integer greater than 0")
-                return False
-            
-        elif self.radio_value.get() == "sheet":
-            if number == "":
-                if not preview:
-                    self.set_error("No number of sheets specified")
-                return False
-            if not number.isdigit() or int(number) < 1:
-                if not preview:
-                    self.set_error("Number of sheets must be an integer greater than 0")
-                return False
-            
-        empty_pages = self.empty_pages.get()
-        if not empty_pages.isdigit() or int(empty_pages) < 0:
-            if not preview:
-                self.set_error("Number of empty pages must be an integer greater than or equal to 0")
-            return False
-            
-        self.clear_error()
-        return True
-
-    def render(self):
-        input_file = self.input_variable.get()
-        output_file = self.output_variable.get()
-        remove_annotations = self.remove_annotations.get()
-        number = self.variable_entry.get()
-
-        if not self.valid_data():
-            return
-        
-        if (self.make_thread is not None and self.make_thread.is_alive()) or (self.exception_render_thread is not None and self.exception_render_thread.is_alive()):
-            self.set_error("A process is already running")
-            return
-        
-        try:
-            if self.radio_value.get() == "booklet":
-                self.make_thread = threading.Thread(target=self.thread_make_pdf, args=(input_file, output_file), kwargs={"remove_annotations": remove_annotations, "n_booklets": int(number), "progress": self})
-                self.make_thread.start()
-            elif self.radio_value.get() == "sheet":
-                self.make_thread = threading.Thread(target=self.thread_make_pdf, args=(input_file, output_file), kwargs={"remove_annotations": remove_annotations, "n_sheets": int(number), "progress": self})
-                self.make_thread.start()
+                raise ValueError(f"Number of {label} must be an integer greater than 0")
+            if mode == "booklet":
+                n_booklets = int(number)
             else:
-                self.make_thread = threading.Thread(target=self.thread_make_pdf, args=(input_file, output_file), kwargs={"remove_annotations": remove_annotations, "progress": self})
-                self.make_thread.start()
+                n_sheets = int(number)
 
-            self.exception_render_thread = threading.Thread(target=self.exception_render_daemon)
-            self.exception_render_thread.start()
+        endpapers = self.empty_pages.get().strip()
+        if not endpapers.isdigit():
+            raise ValueError("Number of endpapers must be an integer greater than or equal to 0")
 
-        except Exception as e:
-            self.set_error(str(e))
+        start = self.numbering_start.get().strip()
+        if self.page_numbers.get() and (not start.isdigit() or int(start) < 1):
+            raise ValueError("The first numbered page must be an integer greater than 0")
+
+        return {
+            "n_booklets": n_booklets,
+            "n_sheets": n_sheets,
+            "empty_pages": int(endpapers),
+            "page_numbers": self.page_numbers.get(),
+            "numbering_start": int(start) if start.isdigit() else 1,
+        }
+
+    # --------------------------------------------------------------- preview
+
+    def load_source(self, options):
+        """
+        Returns the document to impose, endpapers and page numbers included.
+
+        The file bytes and the prepared document are cached separately, so
+        changing only the distribution costs nothing and browsing the preview
+        never rebuilds anything.
+        """
+        path = self.input_variable.get()
+
+        if path != self.source_path:
+            with open(path, "rb") as input_file:
+                self.source_bytes = input_file.read()
+            self.source_path = path
+            self.source_page_count = len(PdfReader(BytesIO(self.source_bytes)).pages)
+            self.prepared_key = None
+
+        key = (options["empty_pages"], options["page_numbers"], options["numbering_start"])
+        if key != self.prepared_key:
+            reader = prepare_document(PdfReader(BytesIO(self.source_bytes)), *key)
+            self.padded_pdf = reader
+            self.preview_dimensions = get_dimensions(reader.pages)
+            self.prepared_key = key
+
+        self.endpapers = options["empty_pages"]
+        return self.padded_pdf
+
+    def schedule_preview_refresh(self, *_):
+        """
+        Trace callback on the option variables: refresh once typing settles.
+        """
+        if not getattr(self, "ready", False):
             return
-        
-    def update_preview(self, event=None):
-        self.preview_label.grid_forget()
+        if self.preview_job is not None:
+            self.after_cancel(self.preview_job)
+        self.preview_job = self.after(PREVIEW_DEBOUNCE_MS, self.update_preview)
 
-        empty_pages = max(int(self.empty_pages.get()), 0)
+    def update_preview(self):
+        """
+        Recomputes the distribution from the current options and redraws.
+        """
+        self.preview_job = None
         try:
-            if self.preview_variable.get() in  {"No file selected", "Error while generating preview, invalid options may have been selected"}:
-                self.preview_init()
-            elif empty_pages > 0:
-                try:
-                    self.preview()
-                except Exception:
-                    self.preview_init()
+            options = self.read_options(preview=True)
+            reader = self.load_source(options)
+            self.distrib_booklets_pages = distribution_booklets_pages(
+                len(reader.pages), options["n_booklets"], options["n_sheets"])
+            self.clamp_preview_position()
+            self.show_preview()
+            self.summary_variable.set(self.summary_text(options))
+        except Exception as error:
+            self.distrib_booklets_pages = None
+            self.preview.show_message(f"Cannot preview : {error}")
+            self.summary_variable.set(str(error))
+            self.navigation_variable.set("")
+
+    def clamp_preview_position(self):
+        """
+        Keeps the current position valid after the distribution changed.
+        """
+        self.preview_booklet = min(self.preview_booklet, len(self.distrib_booklets_pages) - 1)
+        self.preview_pair = min(self.preview_pair, len(self.distrib_booklets_pages[self.preview_booklet]) - 1)
+
+    def summary_text(self, options):
+        """
+        One-paragraph recap of what the program decided on its own.
+        """
+        booklets = self.distrib_booklets_pages
+        sheets = [math.ceil(len(booklet) / 2) for booklet in booklets]
+        # Endpapers are real (blank) pages of the padded document, so the BLANK
+        # sentinels left in the distribution are exactly the filler pages.
+        padding = sum(1 for booklet in booklets for pair in booklet for page in pair if page == BLANK)
+        total = self.source_page_count + 2 * self.endpapers
+
+        lines = [f"{self.source_page_count} pages"]
+        if self.endpapers:
+            lines[0] += f" + {self.endpapers} endpapers on each side = {total} pages"
+
+        counts = " + ".join(str(sheet) for sheet in sheets)
+        booklet_word = "booklet" if len(booklets) == 1 else "booklets"
+        lines.append(f"{len(booklets)} {booklet_word} of {counts} sheets, {sum(sheets)} sheets in total.")
+
+        if padding > 0:
+            page_word = "page" if padding == 1 else "pages"
+            lines.append(f"{padding} blank {page_word} added at the very end to fill the last sheet.")
+
+        if options["page_numbers"]:
+            first = options["numbering_start"]
+            last = total - self.endpapers
+            if first > last:
+                lines.append("No page numbered: numbering starts past the last page.")
             else:
-                self.preview()
-            self.preview_variable.set("")
-        except Exception as e:
-            self.preview_variable.set("Error while generating preview, invalid options may have been selected")
-            self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
+                lines.append(f"Numbers 1 to {last - first + 1} printed on physical pages "
+                             f"{first} to {last}.")
 
-            # raise e
-    
-    def preview_init(self):
-        if not self.valid_data(preview=True):
-            raise Exception("Invalid data")
-        
-        self.preview_booklet = 0
-        self.preview_pair = 0
-        
-        if self.radio_value.get() == "booklet":
-            n_booklets = int(self.variable_entry.get())
-            n_sheets = 7
-        elif self.radio_value.get() == "sheet":
-            n_sheets = int(self.variable_entry.get())
-            n_booklets = "auto"
-        else:
-            n_booklets = "auto"
-            n_sheets = 7
+        return "\n".join(lines)
 
-        input_filename = self.input_variable.get()
+    def source_page_label(self, index):
+        """
+        Page number as it appears in the file the user selected.
 
-        empty_pages = int(self.empty_pages.get())
-        if empty_pages > 0:
-            input_filename = add_empty_pages(input_filename, empty_pages)
+        Endpapers and filler pages have no counterpart there.
+        """
+        if index == BLANK:
+            return "—"
+        original = index - self.endpapers
+        if 0 <= original < self.source_page_count:
+            return str(original + 1)
+        return "—"
 
-        with open(input_filename, 'rb') as input_file:
-            reader = PyPDF2.PdfReader(input_file)
-            self.distrib_booklets_pages = distribution_booklets_pages(len(reader.pages), n_booklets, n_sheets)
-        
-        self.preview_booklet = 0
-        self.preview_pair = 0
-        self.preview()
+    def show_preview(self):
+        """
+        Renders the currently selected printed side into the preview area.
+        """
+        pair = self.distrib_booklets_pages[self.preview_booklet][self.preview_pair]
+        width, height = self.preview_dimensions
 
-        
-    def preview(self):
-        if not self.valid_data(preview=True):
-            raise Exception("Invalid data")
-        
-        if self.distrib_booklets_pages is None:
-            raise Exception("No preview data")
-        
-        if self.preview_pdf is not None:
-            self.preview_pdf.destroy()
+        writer = PdfWriter()
+        writer.add_page(make_sheet_side(self.padded_pdf, pair, width, height))
+        if self.remove_annotations.get():
+            writer.remove_links()
 
-        page_left = self.distrib_booklets_pages[self.preview_booklet][self.preview_pair][0]
-        page_right = self.distrib_booklets_pages[self.preview_booklet][self.preview_pair][1]
+        buffer = BytesIO()
+        writer.write(buffer)
+        self.preview.show_pdf(buffer.getvalue())
 
-        input_filename = self.input_variable.get()
+        page = self.current_page()
+        total_sheets = sum(math.ceil(len(booklet) / 2) for booklet in self.distrib_booklets_pages)
+        sheet = (page + 1) // 2
+        side = "front" if self.preview_pair % 2 == 0 else "back"
 
-        empty_pages = int(self.empty_pages.get())
-        if empty_pages > 0:
-            input_filename = f"{os.path.dirname(os.path.realpath(__file__))}/temp/empty.pdf"
+        self.navigation_variable.set(f"Sheet {sheet} of {total_sheets} · {side}")
+        self.booklet_value.set(f"{self.preview_booklet + 1} / {len(self.distrib_booklets_pages)}")
+        self.booklet_sheet_value.set(str((self.preview_pair // 2) + 1))
+        self.sheet_value.set(str(sheet))
+        self.page_value.set(str(page))
+        self.page_input_value.set(" – ".join(self.source_page_label(index) for index in pair))
 
-        with open(input_filename, 'rb') as input_file:
-            reader = PyPDF2.PdfReader(input_file)
+    def current_page(self):
+        """
+        1-based index of the current side in the output file.
+        """
+        previous = sum(len(booklet) for booklet in self.distrib_booklets_pages[:self.preview_booklet])
+        return previous + self.preview_pair + 1
 
-            width, height = get_dimensions(reader.pages)
+    def move_preview(self, step):
+        if not self.distrib_booklets_pages:
+            return
 
-            new_page_1 = PyPDF2.PageObject.create_blank_page(
-                        width=2*width,
-                        height=height)
-                    
-            new_page_2 = PyPDF2.PageObject.create_blank_page(
-                width=2*width,
-                height=height)
-            
-            if page_left != -1:  # -1 means no page
-                page = reader.pages[page_left]
-                if page.mediabox.width != width or page.mediabox.height != height:
-                    page = resize(page, width, height)
-                new_page_1.merge_page(page)
+        self.preview_pair += step
+        booklets = self.distrib_booklets_pages
 
+        if self.preview_pair >= len(booklets[self.preview_booklet]):
+            self.preview_booklet = (self.preview_booklet + 1) % len(booklets)
+            self.preview_pair = 0
+        elif self.preview_pair < 0:
+            self.preview_booklet = (self.preview_booklet - 1) % len(booklets)
+            self.preview_pair = len(booklets[self.preview_booklet]) - 1
 
-            if page_right != -1:
-                page = reader.pages[page_right]
-                if page.mediabox.width != width or page.mediabox.height != height:
-                    page = resize(page, width, height)
-                new_page_2.merge_page(page)
-                new_page_2.add_transformation(PyPDF2.Transformation().translate(width, 0))
-
-            new_page_1.merge_page(new_page_2)
-            new_page_1 = resize(new_page_1, 600, 424)
-
-            writer = PyPDF2.PdfWriter()
-            writer.add_page(new_page_1)
-
-            if self.remove_annotations.get():
-                writer.remove_links()
-
-            with open(self.preview_file, 'wb') as output_file:
-                writer.write(output_file)
-
-            v1 = pdf.ShowPdf()
-            
-            self.preview_pdf = v1.pdf_view(self,
-                                        pdf_location=self.preview_file,
-                                        width=75, height=25)
-            
-            self.preview_pdf.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
-        
-        self.booklet_value.set(self.preview_booklet + 1)
-        self.booklet_sheet_value.set((self.preview_pair//2) + 1)
-        self.page_value.set(self.get_current_page())
-        self.sheet_value.set(self.get_current_sheet())
-        current_pair = self.distrib_booklets_pages[self.preview_booklet][self.preview_pair]
-        self.page_input_value.set(f"{current_pair[0] + 1}-{current_pair[1] + 1}")
+        self.show_preview()
 
     def next_preview(self):
-        if self.preview_booklet is None or self.preview_pair is None:
-            return
-        
-        current_booklet = self.distrib_booklets_pages[self.preview_booklet]
-        if self.preview_pair == len(current_booklet) - 1:
-            if self.preview_booklet == len(self.distrib_booklets_pages) - 1:
-                self.preview_booklet = 0
-            else:
-                self.preview_booklet += 1
-            self.preview_pair = 0
-        else:
-            self.preview_pair += 1
-        self.update_preview()
+        self.move_preview(1)
 
     def previous_preview(self):
-        if self.preview_booklet is None or self.preview_pair is None:
+        self.move_preview(-1)
+
+    def reset_preview(self):
+        self.distrib_booklets_pages = None
+        self.preview_booklet = 0
+        self.preview_pair = 0
+        self.preview.show_message(NO_FILE)
+        self.navigation_variable.set("")
+        self.summary_variable.set("Select a PDF file to start.")
+        for variable in (self.booklet_value, self.booklet_sheet_value, self.sheet_value,
+                         self.page_input_value, self.page_value):
+            variable.set("-")
+
+    # ------------------------------------------------------------- rendering
+
+    def render(self):
+        if self.render_thread is not None and self.render_thread.is_alive():
+            self.set_error("A process is already running")
             return
-        
-        if self.preview_pair == 0:
-            if self.preview_booklet == 0:
-                self.preview_booklet = len(self.distrib_booklets_pages) - 1
-            else:
-                self.preview_booklet -= 1
-            self.preview_pair = len(self.distrib_booklets_pages[self.preview_booklet]) - 1
-        else:
-            self.preview_pair -= 1
-        self.update_preview()
 
-    def get_current_sheet(self):
-        return (sum(len(booklet) for booklet in self.distrib_booklets_pages[:self.preview_booklet]) + self.preview_pair + 2) // 2
-    
-    def get_current_page(self):
-        return sum(len(booklet) for booklet in self.distrib_booklets_pages[:self.preview_booklet]) + self.preview_pair + 1
-        
-    def exception_render_daemon(self):
-        while self.make_thread.is_alive():
-                time.sleep(1)
+        try:
+            options = self.read_options()
+        except Exception as error:
+            self.set_error(error)
+            return
 
-        if len(self.errors) > 0:
-            self.set_error(self.errors[0])
-            self.errors = []
+        self.clear_error()
+        self.render_error = None
+        self.progress_total = 0
+        self.progress_done = 0
+
+        self.render_thread = threading.Thread(
+            target=self.thread_make_pdf,
+            args=(self.input_variable.get(), self.output_variable.get()),
+            kwargs={**options, "remove_annotations": self.remove_annotations.get(), "progress": self},
+            daemon=True,
+        )
+        self.render_thread.start()
+
+        self.progress_bar.grid(row=1, column=0, sticky="ew", pady=(15, 0))
+        self.after(PROGRESS_REFRESH_MS, self.poll_render)
+
+    def thread_make_pdf(self, input_file, output_file, **kwargs):
+        """
+        Worker thread. Never touches a widget: errors are stored and picked up
+        by poll_render() on the main thread.
+        """
+        try:
+            make_pdf(input_file, output_file, **kwargs)
+        except Exception as error:
+            self.render_error = error
+
+    def poll_render(self):
+        """
+        Main-thread poller driving the progress bar and reporting the outcome.
+        """
+        self.refresh_progress()
+
+        if self.render_thread.is_alive():
+            self.after(PROGRESS_REFRESH_MS, self.poll_render)
+            return
+
+        self.progress_bar.grid_forget()
+
+        if self.render_error is not None:
+            self.set_error(self.render_error)
+            self.render_error = None
         else:
-            self.progression_label.grid_forget()
-            self.progress_bar.grid_forget()
             self.clear_error()
             messagebox.showinfo("Success", "PDF created successfully")
-            self.clean_tmp()   
 
-    def thread_make_pdf(self, input_file, output_file, n_booklets="auto", remove_annotations=True, n_sheets=7, progress=None):
-        try:
-            empty_pages = int(self.empty_pages.get())
-            make_pdf(input_file, output_file, n_booklets=n_booklets, remove_annotations=remove_annotations, n_sheets=n_sheets, progress=progress, empty_pages=empty_pages)
-        except Exception as e:
-            self.errors.append(str(e))
-            return
+    # ----------------------------------------------------------------- files
 
     def change_entry(self):
-        if self.radio_value.get() == "booklet":
-            self.title_entry.grid(row=8, column=0, sticky="w", padx=(30, 0))
-            self.number_entry.grid(row=8, column=1, sticky="e")
-            self.variable_title_entry.set("Number of booklets : ")
-        elif self.radio_value.get() == "sheet":
-            self.title_entry.grid(row=8, column=0, sticky="w", padx=(30, 0))
-            self.number_entry.grid(row=8, column=1, sticky="e")
-            self.variable_title_entry.set("Number of sheets per booklet : ")
+        mode = self.radio_value.get()
+        if mode in ("booklet", "sheet"):
+            self.variable_title_entry.set(
+                "Number of booklets" if mode == "booklet" else "Number of sheets per booklet"
+            )
+            self.title_entry.grid(row=12, column=0, sticky="w", pady=(10, 0))
+            self.number_entry.grid(row=12, column=1, sticky="e", pady=(10, 0))
         else:
             self.title_entry.grid_forget()
             self.number_entry.grid_forget()
 
-    def clean_tmp(self):
-        temp_dir = f"{os.path.dirname(os.path.realpath(__file__))}/temp"
-        temp_preview = f"{temp_dir}/preview.pdf"
-        temp_empty = f"{temp_dir}/empty.pdf"
-
-        if os.path.exists(temp_preview):
-            os.remove(temp_preview)
-
-        if os.path.exists(temp_empty):
-            os.remove(temp_empty)
-
-        if self.preview_pdf:
-            self.preview_pdf.grid_forget()
-            self.preview_pdf = None
-        self.preview_label.grid(row=2, column=2, columnspan=3, rowspan=12, pady=(30, 0))
-        self.preview_variable.set("No file selected")
-        self.input_variable.set("No file selected")
-        self.output_variable.set("No file selected")
-
-        self.booklet_value.set(1)
-        self.booklet_sheet_value.set(1)
-        self.sheet_value.set(1)
-        self.page_input_value.set("")
-        self.page_value.set(1)
-        
+    @staticmethod
+    def default_output(input_path):
+        """
+        Sibling of the input file, with a suffix: book.pdf -> book-booklet.pdf.
+        """
+        directory, filename = os.path.split(input_path)
+        stem, extension = os.path.splitext(filename)
+        return os.path.join(directory, f"{stem}{OUTPUT_SUFFIX}{extension or '.pdf'}")
 
     def select_input_file(self):
-        file_selected = filedialog.askopenfile(mode='r', initialdir=os.path.expanduser("~"), title="Select a file",
-                                               filetypes=[("fichiers pdf", "*.pdf")])
-        
-        if file_selected:
-            self.clean_tmp()
-            self.input_variable.set(file_selected.name)
-            self.preview_booklet = 0
-            self.preview_pair = 0
+        filename = filedialog.askopenfilename(
+            initialdir=os.path.expanduser("~"), title="Select a file",
+            filetypes=[("PDF files", "*.pdf")])
+
+        if filename:
+            self.reset_preview()
+            self.input_variable.set(filename)
+            self.output_variable.set(self.default_output(filename))
             self.update_preview()
 
     def select_output_file(self):
-        file_selected = filedialog.asksaveasfile(mode='w', defaultextension=".pdf", initialdir=os.path.expanduser("~"),
-                                                 filetypes=[("fichiers pdf", "*.pdf")], title="Select a file",
-                                                 initialfile="output")
-        
-        if file_selected:
-            self.output_variable.set(file_selected.name)
-            self.output_file.update()
+        current = self.output_variable.get()
+        directory = os.path.dirname(current) if current != NO_FILE else os.path.expanduser("~")
+        initial = os.path.basename(current) if current != NO_FILE else "output.pdf"
+
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".pdf", initialdir=directory,
+            filetypes=[("PDF files", "*.pdf")], title="Select a file",
+            initialfile=initial)
+
+        if filename:
+            self.output_variable.set(filename)
 
 
 if __name__ == "__main__":
     app = Application()
     app.mainloop()
-

@@ -1,153 +1,210 @@
-import PyPDF2
-from distribution import distribution_booklets_pages
+"""
+Turns a regular PDF into a duplex-printable, foldable booklet PDF.
+
+Each output page is one side of a physical sheet: two source pages scaled to
+half size and placed side by side, so the sheet keeps the same paper format as
+the input, only rotated to landscape.
+"""
+
 import os
+from collections import Counter
+from io import BytesIO
 
-def add_empty_pages(input_filename, n_pages):
+import pymupdf
+from pypdf import PageObject, PdfReader, PdfWriter, Transformation
+
+from distribution import BLANK, DEFAULT_SHEETS_PER_BOOKLET, distribution_booklets_pages
+
+# Page numbers are stamped on the source pages, which the imposition then scales
+# to half size, so both ratios are expressed against the source page height and
+# chosen to give roughly 10 pt of text about 1 cm above the edge once printed.
+NUMBER_FONT_RATIO = 1 / 42
+NUMBER_MARGIN_RATIO = 1 / 14
+NUMBER_FONT = "helv"
+
+
+def get_dimensions(pages):
     """
-    Adds a certain number of empty pages at the beggining
-    and the end of the PDF file.
+    Returns the most common (width, height) among the given pages.
+
+    Source pages of any other size are scaled to fit that format.
     """
-    with open(input_filename, 'rb') as input_file:
-        reader = PyPDF2.PdfReader(input_file)
+    sizes = Counter((page.mediabox.width, page.mediabox.height) for page in pages)
+    if not sizes:
+        raise ValueError("the PDF file has no page")
 
-        writer = PyPDF2.PdfWriter()
-
-        output_filename = f"{os.path.dirname(os.path.realpath(__file__))}/temp/empty.pdf"
-        with open(output_filename, 'wb') as output_file:
-            width, height = get_dimensions(reader.pages)
-
-            for _ in range(n_pages):
-                page = PyPDF2.PageObject.create_blank_page(
-                    width=width,
-                    height=height)
-                writer.add_page(page)
-
-            for page in reader.pages:
-                writer.add_page(page)
-
-            for _ in range(n_pages):
-                page = PyPDF2.PageObject.create_blank_page(
-                    width=width,
-                    height=height)
-                writer.add_page(page)
-            
-            writer.write(output_file)
-
-    return output_filename
+    width, height = sizes.most_common(1)[0][0]
+    return float(width), float(height)
 
 
+def add_empty_pages(reader, n_pages):
+    """
+    Returns a new reader with n_pages blank pages added at the beginning and at
+    the end of the document, to be glued to the cover.
+    """
+    if n_pages <= 0:
+        return reader
 
-def make_pdf(input_filename, output_filename, n_booklets="auto", remove_annotations=True, n_sheets=7, progress=None, empty_pages=0):
+    width, height = get_dimensions(reader.pages)
 
-    if input_filename == output_filename:
+    writer = PdfWriter()
+    for _ in range(n_pages):
+        writer.add_blank_page(width=width, height=height)
+    for page in reader.pages:
+        writer.add_page(page)
+    for _ in range(n_pages):
+        writer.add_blank_page(width=width, height=height)
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    buffer.seek(0)
+    return PdfReader(buffer)
+
+
+def add_page_numbers(reader, first_page=1, last_page=None):
+    """
+    Returns a new reader with a page number centred at the bottom of every page
+    from first_page to last_page (1-based, inclusive).
+
+    The numbering restarts at 1 on first_page, so skipping the endpapers still
+    gives the content a natural 1, 2, 3... Pages outside the range are left
+    untouched, which is how endpapers stay blank.
+
+    Numbers are stamped on the source pages, before the imposition: they are
+    then scaled, letterboxed and rotated along with the page they belong to.
+    """
+    total = len(reader.pages)
+    first_page = max(1, first_page)
+    last_page = total if last_page is None else min(last_page, total)
+
+    if first_page > last_page:
+        return reader
+
+    buffer = BytesIO()
+    PdfWriter(clone_from=reader).write(buffer)
+
+    with pymupdf.open(stream=buffer.getvalue(), filetype="pdf") as document:
+        for index in range(first_page - 1, last_page):
+            page = document[index]
+            rect = page.rect
+            size = rect.height * NUMBER_FONT_RATIO
+            text = str(index - first_page + 2)
+            text_width = pymupdf.get_text_length(text, fontname=NUMBER_FONT, fontsize=size)
+            # pymupdf places text from the top of the page, on the baseline.
+            page.insert_text(
+                (rect.x0 + (rect.width - text_width) / 2,
+                 rect.y1 - rect.height * NUMBER_MARGIN_RATIO),
+                text, fontname=NUMBER_FONT, fontsize=size)
+
+        return PdfReader(BytesIO(document.tobytes()))
+
+
+def _needs_rotation(page_width, page_height, box_width, box_height):
+    """
+    True when the page and the slot it must fill have opposite orientations.
+    """
+    return (page_width > page_height) != (box_width > box_height)
+
+
+def _placement(page, box_width, box_height, x_offset):
+    """
+    Transformation fitting a source page into the (box_width, box_height) slot
+    starting at x_offset on the sheet.
+
+    The page keeps its aspect ratio and is centred in the slot, leaving white
+    margins when the formats differ (letterboxing). A page whose orientation is
+    the opposite of the slot's is rotated 90° counter-clockwise first, the usual
+    convention for landscape plates: the reader turns the book clockwise.
+    """
+    box = page.mediabox
+    page_width, page_height = float(box.width), float(box.height)
+
+    # Bring the page origin to (0, 0) first: a mediabox does not necessarily
+    # start there (cropped or scanned documents often do not).
+    transformation = Transformation().translate(-float(box.left), -float(box.bottom))
+
+    if _needs_rotation(page_width, page_height, box_width, box_height):
+        # Rotating counter-clockwise sends the page into negative x; push it
+        # back, and swap the dimensions used for the fit.
+        transformation = transformation.rotate(90).translate(page_height, 0)
+        page_width, page_height = page_height, page_width
+
+    # A single ratio for both axes, so nothing is stretched.
+    ratio = min(box_width / page_width, box_height / page_height)
+    margin_x = (box_width - page_width * ratio) / 2
+    margin_y = (box_height - page_height * ratio) / 2
+
+    return transformation.scale(ratio, ratio).translate(x_offset + margin_x, margin_y)
+
+
+def make_sheet_side(reader, pair, width, height):
+    """
+    Builds one printed side from a (left, right) pair of source page indices.
+
+    The result is a landscape page of width x height/2 carrying both source
+    pages side by side, each in a slot half as wide and half as tall as the
+    reference format. BLANK leaves the corresponding half empty.
+    """
+    left, right = pair
+    slot_width, slot_height = width / 2, height / 2
+    sheet = PageObject.create_blank_page(width=width, height=slot_height)
+
+    for index, x_offset in ((left, 0), (right, slot_width)):
+        if index == BLANK:
+            continue
+        page = reader.pages[index]
+        sheet.merge_transformed_page(page, _placement(page, slot_width, slot_height, x_offset))
+
+    return sheet
+
+
+def prepare_document(reader, empty_pages=0, page_numbers=False, numbering_start=1):
+    """
+    Applies to a source document everything that happens before the imposition:
+    the endpapers, then the page numbers.
+
+    Order matters. The endpapers become real pages first, so numbering_start
+    counts physical pages of the document that will actually be printed, and the
+    trailing endpapers are excluded from the numbering.
+    """
+    reader = add_empty_pages(reader, empty_pages)
+
+    if page_numbers:
+        reader = add_page_numbers(reader, numbering_start, len(reader.pages) - empty_pages)
+
+    return reader
+
+
+def make_pdf(input_filename, output_filename, n_booklets="auto", remove_annotations=True,
+             n_sheets=DEFAULT_SHEETS_PER_BOOKLET, progress=None, empty_pages=0,
+             page_numbers=False, numbering_start=1):
+    """
+    Writes the booklet version of input_filename to output_filename.
+
+    progress, if given, is any object exposing progress_init(total) and
+    update_progress(); it is called once per printed side.
+    """
+
+    if os.path.realpath(input_filename) == os.path.realpath(output_filename):
         raise ValueError("The input and output file cannot be the same")
-    
-    if empty_pages > 0:
-        input_filename = add_empty_pages(input_filename, empty_pages)
 
-    # Open the input PDF file in read-binary mode
-    with open(input_filename, 'rb') as input_file:
-        # Create a PDF reader object
-        reader = PyPDF2.PdfReader(input_file)
+    reader = prepare_document(PdfReader(input_filename), empty_pages, page_numbers, numbering_start)
 
-        # Create a PDF writer object
-        writer = PyPDF2.PdfWriter()
+    distrib_booklets_pages = distribution_booklets_pages(len(reader.pages), n_booklets, n_sheets)
+    width, height = get_dimensions(reader.pages)
 
-        # Get the distribution of pages in booklets
-        distrib_booklets_pages = distribution_booklets_pages(len(reader.pages), n_booklets, n_sheets)
+    if progress:
+        progress.progress_init(sum(len(booklet) for booklet in distrib_booklets_pages))
 
-        # Create a new PDF file in write-binary mode
-        with open(output_filename, 'wb') as output_file:
-
+    writer = PdfWriter()
+    for booklet in distrib_booklets_pages:
+        for pair in booklet:
+            writer.add_page(make_sheet_side(reader, pair, width, height))
             if progress:
-                nb_pairs = [len(booklet) for booklet in distrib_booklets_pages]
-                nb_pairs = sum(nb_pairs)
-                progress.progress_init(nb_pairs)
-            
-            width, height = get_dimensions(reader.pages)
+                progress.update_progress()
 
-            # Loop through each booklet
-            for distrib_booklet_pages in distrib_booklets_pages:
+    if remove_annotations:
+        writer.remove_links()
 
-                # Loop through each pair of pages
-                for pair_pages in distrib_booklet_pages:
-
-                    if progress:
-                        progress.update_progress()
-
-                    # Create new blank pages
-                    new_page_1 = PyPDF2.PageObject.create_blank_page(
-                        width=2*width,
-                        height=height)
-                    
-                    new_page_2 = PyPDF2.PageObject.create_blank_page(
-                        width=2*width,
-                        height=height)
-
-
-                    # Merge the two pages into the new page
-
-                    # Merge the new page (twice as big as A4 and horizontal) with a page letting the right half empty
-                    if pair_pages[0] != -1:  # -1 means no page
-                        page = reader.pages[pair_pages[0]]
-                        if page.mediabox.width != width or page.mediabox.height != height:
-                            page = resize(page, width, height)
-                        new_page_1.merge_page(page)
-
-                    # Do the same for the second page but translate it to the right to let the left half empty
-                    if pair_pages[1] != -1:
-                        page = reader.pages[pair_pages[1]]
-                        if page.mediabox.width != width or page.mediabox.height != height:
-                            page = resize(page, width, height)
-                        new_page_2.merge_page(page)
-                        new_page_2.add_transformation(PyPDF2.Transformation().translate(width, 0))
-                
-                    # Merge the two pages into the new page
-                    new_page_1.merge_page(new_page_2)
-
-                    # Scale the new page to half the size to fit on A4
-                    new_page_1.scale(0.5, 0.5)
-
-                    # Add the new page to the output PDF file
-                    writer.add_page(new_page_1)
-
-            # Remove annotations
-            if remove_annotations:
-                writer.remove_links()
-
-            # Write the output PDF file
-            writer.write(output_file)
-
-
-def resize(page, new_width, new_height):
-
-    width = page.mediabox.width
-    height = page.mediabox.height
-
-    ratio_width = float(round(new_width / width, 3))
-    ratio_height = float(round(new_height / height, 3))
-
-    page.scale(ratio_width, ratio_height)
-
-    return page
-
-
-def get_dimensions(reader_pages):
-
-    dimensions = {"width": dict(), "height": dict()}
-    for page in reader_pages:
-        width = page.mediabox.width
-        height = page.mediabox.height
-        if width in dimensions["width"]:
-            dimensions["width"][width] += 1
-        else:
-            dimensions["width"][width] = 1
-        if height in dimensions["height"]:
-            dimensions["height"][height] += 1
-        else:
-            dimensions["height"][height] = 1
-    
-    most_common_width = max(dimensions["width"], key=dimensions["width"].get)
-    most_common_height = max(dimensions["height"], key=dimensions["height"].get)
-
-    return most_common_width, most_common_height
+    with open(output_filename, "wb") as output_file:
+        writer.write(output_file)
